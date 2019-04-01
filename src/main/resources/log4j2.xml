@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Configuration>
+    <Properties>
+        <Property name="LOG_DIR">/opt/logs</Property>
+    </Properties>
+
+    <Appenders>
+        <Console name="Console" target="SYSTEM_OUT">
+            <PatternLayout>
+                <Pattern>%d{yyyy-MM-dd HH:mm:ss} %-5p %m%n</Pattern>
+            </PatternLayout>
+        </Console>
+
+        <RollingFile
+                name="ErrorLog"
+                fileName="${LOG_DIR}/application_error.log"
+                filePattern="${LOG_DIR}/application_error-%d{yyyy-MM-dd}.log.gz"
+                ignoreExceptions="false">
+            <PatternLayout>
+                <Pattern>%d{yyyy-MM-dd HH:mm:ss} %-5p %m%n</Pattern>
+            </PatternLayout>
+            <Policies>
+                <TimeBasedTriggeringPolicy interval="1"/>
+            </Policies>
+            <DefaultRolloverStrategy max="5" />
+        </RollingFile>
+        <RollingFile
+                name="InfoLog"
+                fileName="${LOG_DIR}/application_info.log"
+                filePattern="${LOG_DIR}/application_info-%d{yyyy-MM-dd}.log.gz"
+                ignoreExceptions="false">
+            <PatternLayout>
+                <Pattern>%d{yyyy-MM-dd HH:mm:ss} %-5p %m%n</Pattern>
+            </PatternLayout>
+            <Policies>
+                <TimeBasedTriggeringPolicy interval="1"/>
+            </Policies>
+            <DefaultRolloverStrategy max="5" />
+        </RollingFile>
+    </Appenders>
+
+    <Loggers>
+        <logger name="error" level="ERROR" additivity="false">
+            <AppenderRef ref="ErrorLog"/>
+        </logger>
+        <logger name="info" level="INFO" additivity="false">
+            <AppenderRef ref="Console"/>
+            <AppenderRef ref="InfoLog"/>
+        </logger>
+    </Loggers>
+
+</Configuration>
