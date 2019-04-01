@@ -8,6 +8,11 @@ Protocols supported currently:-
 - FTP
 - SFTP
 
+## What you will need
+- A favorite text editor or IDE
+- JDK 8 or later
+- Install Maven
+
 ## Steps to run application
 1. cd FileDownloader
 2. mvn clean install
