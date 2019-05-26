@@ -1,10 +1,12 @@
 package com.agoda.service.impl;
 
 import com.agoda.constants.ApplicationConstants;
+import com.agoda.model.Credential;
 import com.agoda.service.FileDownloader;
 import com.agoda.util.StringUtility;
 import org.apache.commons.io.FileUtils;
 
+import java.io.BufferedInputStream;
 import java.io.File;
 import java.io.IOException;
 import java.net.URI;
@@ -57,5 +59,25 @@ public class HttpProtocolFileDownloader implements FileDownloader
         }
 
         return null;
+    }
+
+    @Override
+    public Object establishConnectionToRemoteServer(URI fileUri) throws Exception {
+        return null;
+    }
+
+    @Override
+    public Object establishConnectionToRemoteServer(URI fileUri, Credential credential) throws Exception {
+        return null;
+    }
+
+    @Override
+    public BufferedInputStream getBufferedInputStreamFromConnection(Object connObject, URI fileUri) throws Exception {
+        return null;
+    }
+
+    @Override
+    public void disconnectRemoteServer(Object connObject) {
+
     }
 }

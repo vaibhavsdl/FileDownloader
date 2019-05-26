@@ -4,20 +4,14 @@ import com.agoda.constants.ApplicationConstants;
 import com.agoda.model.Credential;
 import com.agoda.service.SecuredFileDownloader;
 import com.agoda.util.CredentialHandler;
-import com.agoda.util.StringUtility;
-import com.jcraft.jsch.Channel;
-import com.jcraft.jsch.ChannelSftp;
-import com.jcraft.jsch.JSch;
-import com.jcraft.jsch.Session;
+import com.jcraft.jsch.*;
 
-import java.io.BufferedOutputStream;
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.OutputStream;
+import java.io.*;
 import java.net.URI;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Properties;
 
-import static com.agoda.constants.LoggingConstants.ERROR_LOGGER;
 import static com.agoda.constants.LoggingConstants.INFO_LOGGER;
 
 /**
@@ -25,98 +19,61 @@ import static com.agoda.constants.LoggingConstants.INFO_LOGGER;
  */
 public class SftpProtocolFileDownloader implements SecuredFileDownloader
 {
-    /**
-     *
-     * @param path  local path where files should be downloaded
-     * @param fileUrl URI of file to be downloaded
-     * @return  File object of downloaded file
-     */
     @Override
-    public File downloadFile(String path, URI fileUrl) {
+    public Object establishConnectionToRemoteServer(URI fileUri) throws JSchException {
+        Credential credential = getCredentialForFile(fileUri.toString());
 
-        // get credentials of file to be downloaded
-        Credential credential = getCredentialForFile(fileUrl.toString());
-
-        if(credential != null) {
-            return downloadFile(path, fileUrl, credential);
-        }
-        return null;
+        return establishConnectionToRemoteServer(fileUri, credential);
     }
 
-    /**
-     *
-     * @param path  local path where files should be downloaded
-     * @param fileUri   URI of file to be downloaded
-     * @param credential    Credentials of file to be downloaded
-     * @return File object of downloaded file
-     */
     @Override
-    public File downloadFile(String path, URI fileUri, Credential credential)
-    {
+    public Object establishConnectionToRemoteServer(URI fileUri, Credential credential) throws JSchException {
         String server = fileUri.getHost();
+        JSch jsch = new JSch();
+        Session sshSession = jsch.getSession(credential.getUserName(), server, getPort(fileUri));
+        if(sshSession != null) {
+            sshSession.setPassword(credential.getPassword());
+            Properties sshConfig = new Properties();
+            sshConfig.put("StrictHostKeyChecking", "no");
+            sshSession.setTimeout(ApplicationConstants.DATA_TIMEOUT_VALUE);
+            sshSession.setConfig(sshConfig);
+            sshSession.connect();
+            INFO_LOGGER.info("Session connected.");
+            INFO_LOGGER.info("Opening Channel.");
+            Channel channel = sshSession.openChannel("sftp");
+            channel.connect();
+            ChannelSftp sftp = (ChannelSftp) channel;
 
-        String remoteFile = fileUri.getPath().substring(1);
+            Map<String, Object> connectionEntityMap = new HashMap<>();
+            connectionEntityMap.put("sftp", sftp);
+            connectionEntityMap.put("session", sshSession);
 
-        String absFileName = StringUtility.cleanPathString(fileUri.getHost())
-                + StringUtility.cleanFileNameString(fileUri.getPath());
-        File tempDownloadFile = new File(path, absFileName + ApplicationConstants.TEMP_FILE_EXTENSION);
-        File downloadFile = new File(path, absFileName);
-        ChannelSftp sftp = null;
-        Session sshSession = null;
-        Channel channel = null;
-
-        try
-        (
-                OutputStream outputStream = new BufferedOutputStream(new FileOutputStream(tempDownloadFile));
-        )
+            return connectionEntityMap;
+        }
+        else
         {
-            JSch jsch = new JSch();
-            sshSession = jsch.getSession(credential.getUserName(), server, getPort(fileUri));
-            if(sshSession != null) {
-                sshSession.setPassword(credential.getPassword());
-                Properties sshConfig = new Properties();
-                sshConfig.put("StrictHostKeyChecking", "no");
-                sshSession.setTimeout(ApplicationConstants.DATA_TIMEOUT_VALUE);
-                sshSession.setConfig(sshConfig);
-                sshSession.connect();
-                INFO_LOGGER.info("Session connected.");
-                INFO_LOGGER.info("Opening Channel.");
-                channel = sshSession.openChannel("sftp");
-                channel.connect();
-                sftp = (ChannelSftp) channel;
-                INFO_LOGGER.info("Connected to " + server + ".");
-
-                sftp.get(fileUri.getPath(), outputStream );
-
-                tempDownloadFile.renameTo(downloadFile);
-
-                INFO_LOGGER.info("File : " + fileUri.toString() + " has been downloaded successfully.");
-                return downloadFile;
-            }
-            else {
-                INFO_LOGGER.info("Failed to create session with server : " + fileUri.getHost());
-            }
-
-        } catch (Exception e) {
-            INFO_LOGGER.info(fileUri.toString() + " download failed!!");
-            ERROR_LOGGER.error(e);
+            return null;
         }
-        finally {
-            if(sftp != null && sftp.isConnected()) {
-                sftp.disconnect();
-            }
-            if(sshSession != null && sshSession.isConnected())
-            {
-                sshSession.disconnect();
-            }
-            if(channel != null && channel.isConnected())
-            {
-                channel.disconnect();
-            }
-            tempDownloadFile.delete();
-        }
+    }
 
-        return null;
+    @Override
+    public BufferedInputStream getBufferedInputStreamFromConnection(Object connObject, URI fileUri) throws SftpException {
+        Map<String, Object> connectionEntityMap = (Map<String, Object>) connObject;
+
+        ChannelSftp channelSftp = (ChannelSftp) connectionEntityMap.get("sftp");
+
+        return new BufferedInputStream(channelSftp.get(fileUri.getPath()));
+    }
+
+    @Override
+    public void disconnectRemoteServer(Object connObject) {
+        Map<String, Object> connectionEntityMap = (Map<String, Object>) connObject;
+
+        ChannelSftp channelSftp = (ChannelSftp) connectionEntityMap.get("sftp");
+        channelSftp.disconnect();
+
+        Session sshSession = (Session) connectionEntityMap.get("session");
+        sshSession.disconnect();
     }
 
     /**

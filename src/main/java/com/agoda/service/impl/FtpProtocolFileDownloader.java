@@ -10,7 +10,6 @@ import org.apache.commons.net.ftp.FTPClient;
 import java.io.*;
 import java.net.URI;
 
-import static com.agoda.constants.LoggingConstants.ERROR_LOGGER;
 import static com.agoda.constants.LoggingConstants.INFO_LOGGER;
 
 /**
@@ -28,103 +27,56 @@ public class FtpProtocolFileDownloader implements SecuredFileDownloader
         return downloadFile(path, fileUri, credential);
     }
 
-
-    /**
-     * Downloads file from remote server to local folder
-     *
-     * @param path  folder where files should be downloaded
-     * @param fileUri   URI of file to be downloaded
-     * @param credential    Credentials to access file on remote server
-     * @return
-     */
     @Override
-    public File downloadFile(String path, URI fileUri, Credential credential)
-    {
+    public Object establishConnectionToRemoteServer(URI fileUri) throws Exception {
+
+        Credential credential = getCredentialForFile(fileUri.toString());
+
+        return establishConnectionToRemoteServer(fileUri, credential);
+    }
+
+    @Override
+    public Object establishConnectionToRemoteServer(URI fileUri, Credential credential) throws Exception {
+        FTPClient ftpClient = new FTPClient();
         String server = fileUri.getHost();
 
-        String remoteFile = fileUri.getPath().substring(1);
+        ftpClient.setConnectTimeout(ApplicationConstants.CONNECTION_TIMEOUT_VALUE);
+        ftpClient.connect(server, getPort());
+        ftpClient.setDefaultTimeout(ApplicationConstants.CONNECTION_TIMEOUT_VALUE);
+        ftpClient.setDataTimeout(ApplicationConstants.DATA_TIMEOUT_VALUE);
 
-        String absFileName = StringUtility.cleanPathString(fileUri.getHost())
-                + StringUtility.cleanFileNameString(fileUri.getPath());
-        File tempDownloadFile = new File(path, absFileName + ApplicationConstants.TEMP_FILE_EXTENSION);
-        File downloadFile = new File(path, absFileName);
+        INFO_LOGGER.info("Attempting to connect to server : " + server + "...");
 
-        FTPClient ftpClient = new FTPClient();
-        InputStream inputStream = null;
+        boolean loginSuccessful = ftpClient.login(credential.getUserName(), credential.getPassword());
 
-        try
-        (
-            OutputStream outputStream = new BufferedOutputStream(new FileOutputStream(tempDownloadFile));
-        )
-        {
-            ftpClient.setConnectTimeout(ApplicationConstants.CONNECTION_TIMEOUT_VALUE);
-            ftpClient.connect(server, getPort());
-            ftpClient.setDefaultTimeout(ApplicationConstants.CONNECTION_TIMEOUT_VALUE);
-            ftpClient.setDataTimeout(ApplicationConstants.DATA_TIMEOUT_VALUE);
+        if(loginSuccessful) {
+            INFO_LOGGER.info("Connection successful !");
 
-            INFO_LOGGER.info("Attempting to connect to server : " + server + "...");
+            ftpClient.enterLocalPassiveMode();
+            ftpClient.setFileType(FTP.BINARY_FILE_TYPE);
 
-            boolean loginSuccessful = ftpClient.login(credential.getUserName(), credential.getPassword());
-
-            if(loginSuccessful) {
-                INFO_LOGGER.info("Connection successful !");
-
-                ftpClient.enterLocalPassiveMode();
-                ftpClient.setFileType(FTP.BINARY_FILE_TYPE);
-
-                byte[] bytesArray = new byte[4096];
-                int bytesRead;
-
-                INFO_LOGGER.info("Downloading file : " + fileUri.toString());
-
-                inputStream = ftpClient.retrieveFileStream(remoteFile);
-
-                while ((bytesRead = inputStream.read(bytesArray)) != -1) {
-                    outputStream.write(bytesArray, 0, bytesRead);
-                }
-
-                boolean success = ftpClient.completePendingCommand();
-                if (success) {
-                    INFO_LOGGER.info("File : " + fileUri.toString() + " has been downloaded successfully.");
-                }
-
-                tempDownloadFile.renameTo(downloadFile);
-
-                return downloadFile;
-            }
-            else {
-                INFO_LOGGER.info("Login failed to server !");
-            }
+            return ftpClient;
         }
-        catch (Exception ex) {
-            INFO_LOGGER.info(fileUri.toString() + " download failed!!");
-            ERROR_LOGGER.error(ex);
-        }
-        finally {
-
-            try {
-                if (inputStream != null) {
-                    inputStream.close();
-                }
-            } catch (IOException e)
-            {
-                ERROR_LOGGER.error(e);
-            }
-
-            try {
-                if (ftpClient.isConnected()) {
-                    ftpClient.logout();
-                    ftpClient.disconnect();
-                }
-            } catch (IOException ex) {
-                ERROR_LOGGER.error("Unable to disconnect from ftp server : " + server);
-                ERROR_LOGGER.error(ex);
-            }
-
-            tempDownloadFile.delete();
-        }
-
+        INFO_LOGGER.info("Login failed to server !");
         return null;
+    }
+
+    @Override
+    public BufferedInputStream getBufferedInputStreamFromConnection(Object connObject, URI fileUri) throws Exception
+    {
+        FTPClient ftpClient = (FTPClient) connObject;
+        String remoteFile = fileUri.getPath().substring(1);
+        return new BufferedInputStream(ftpClient.retrieveFileStream(remoteFile));
+    }
+
+    @Override
+    public void disconnectRemoteServer(Object connObject) throws IOException
+    {
+        FTPClient ftpClient = (FTPClient) connObject;
+        if (ftpClient.isConnected()) {
+            ftpClient.logout();
+            ftpClient.disconnect();
+        }
     }
 
     /**

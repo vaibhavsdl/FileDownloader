@@ -1,11 +1,15 @@
 package com.agoda.fetcher;
 
+import com.agoda.servers.MockFtpServer;
+import com.agoda.servers.http.MockHttpServer;
+import org.apache.ftpserver.FtpServer;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -15,12 +19,20 @@ public class FileFetcherTest {
     File expectedOutputFile2;
     String downloadFolderPath = "/tmp";
 
-    @Before
-    public void setUp()
-    {
-        expectedOutputFile1 = new File(downloadFolderPath, "techslides_com_demos_samples_sample.pdf");
+    FtpServer ftpServer;
+    MockHttpServer mockHttpServer;
 
-        expectedOutputFile2 = new File(downloadFolderPath, "speedtest_tele2_net_1Mb.zip");
+    @Before
+    public void setUp() throws IOException {
+        expectedOutputFile1 = new File(downloadFolderPath, "localhost_static_http_image.jpg");
+
+        expectedOutputFile2 = new File(downloadFolderPath, "localhost_ftp_image.jpg");
+
+        ftpServer = MockFtpServer.createServer();
+        MockFtpServer.startFTPServer(ftpServer);
+
+        mockHttpServer = new MockHttpServer();
+        mockHttpServer.start();
     }
 
     @Test
@@ -28,8 +40,8 @@ public class FileFetcherTest {
     {
         List<String> urlList = new ArrayList<>();
 
-        urlList.add("ftp://speedtest.tele2.net/1MB.zip");
-        urlList.add("http://techslides.com/demos/samples/sample.pdf");
+        urlList.add("ftp://localhost/ftp_image.jpg");
+        urlList.add("http://localhost:8080/static/http_image.jpg");
 
         FileFetcher.downloadFilesFromUrls(urlList, downloadFolderPath);
 
@@ -44,5 +56,8 @@ public class FileFetcherTest {
     {
         expectedOutputFile1.delete();
         expectedOutputFile2.delete();
+
+        MockFtpServer.stopFTPServer(ftpServer);
+        mockHttpServer.stop();
     }
 }
